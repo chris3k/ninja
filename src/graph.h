@@ -36,10 +36,14 @@ struct State;
 /// Information about a node in the dependency graph: the file, whether
 /// it's dirty, mtime, etc.
 struct Node {
+  static const uint64_t old_hash_magic = 0x40404040;
+  static const uint64_t hash_magic = 0x42424242;
   Node(const string& path, uint64_t slash_bits)
       : path_(path),
         slash_bits_(slash_bits),
         mtime_(-1),
+        old_hash_(old_hash_magic),
+        hash_(hash_magic),
         dirty_(false),
         dyndep_pending_(false),
         in_edge_(NULL),
@@ -74,6 +78,8 @@ struct Node {
     return mtime_ != -1;
   }
 
+  bool hasContentChanged();
+
   const string& path() const { return path_; }
   /// Get |path()| but use slash_bits to convert back to original slash styles.
   string PathDecanonicalized() const {
@@ -84,6 +90,9 @@ struct Node {
   uint64_t slash_bits() const { return slash_bits_; }
 
   TimeStamp mtime() const { return mtime_; }
+
+  ContentHash old_hash() const { return old_hash_; }
+  ContentHash hash() const { return hash_; }
 
   bool dirty() const { return dirty_; }
   void set_dirty(bool dirty) { dirty_ = dirty; }
@@ -97,6 +106,7 @@ struct Node {
 
   int id() const { return id_; }
   void set_id(int id) { id_ = id; }
+  void set_old_hash(ContentHash h) { old_hash_ = h; }
 
   const vector<Edge*>& out_edges() const { return out_edges_; }
   void AddOutEdge(Edge* edge) { out_edges_.push_back(edge); }
@@ -115,6 +125,10 @@ private:
   ///   0:  we looked, and file doesn't exist
   ///   >0: actual file's mtime
   TimeStamp mtime_;
+
+  ///
+  ContentHash old_hash_;
+  ContentHash hash_;
 
   /// Dirty is true when the underlying file is out-of-date.
   /// But note that Edge::outputs_ready_ is also used in judging which

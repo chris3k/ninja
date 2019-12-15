@@ -504,8 +504,14 @@ bool Plan::CleanNode(DependencyScan* scan, Node* node, string* err) {
       // Recompute most_recent_input.
       Node* most_recent_input = NULL;
       for (vector<Node*>::iterator i = begin; i != end; ++i) {
-        if (!most_recent_input || (*i)->mtime() > most_recent_input->mtime())
-          most_recent_input = *i;
+        if (!most_recent_input || (*i)->mtime() > most_recent_input->mtime()) {
+          string diskerr;
+          RealDiskInterface disk_iface;
+          (*i)->StatIfNecessary(&disk_iface, &diskerr);
+          if ((*i)->hasContentChanged()) {
+            most_recent_input = *i;
+          }
+        }
       }
 
       // Now, this edge is dirty if any of the outputs are dirty.
@@ -1036,9 +1042,12 @@ bool Builder::FinishCommand(CommandRunner::Result* result, string* err) {
     assert(edge->outputs_.size() == 1 && "should have been rejected by parser");
     Node* out = edge->outputs_[0];
     TimeStamp deps_mtime = disk_interface_->Stat(out->path(), err);
+    uint64_t deps_content_hash =
+        CalcFileContentHash(out->path());  // todo(kg): or 0?
     if (deps_mtime == -1)
       return false;
-    if (!scan_.deps_log()->RecordDeps(out, deps_mtime, deps_nodes)) {
+    if (!scan_.deps_log()->RecordDeps(out, deps_mtime, deps_content_hash,
+                                      deps_nodes)) {
       *err = string("Error writing to deps log: ") + strerror(errno);
       return false;
     }

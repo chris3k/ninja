@@ -1936,7 +1936,9 @@ TEST_F(BuildWithDepsLogTest, Straightforward) {
 
     // We should have rebuilt the output due to in2 being
     // out of date.
-    EXPECT_EQ(1u, command_runner_.commands_ran_.size());
+
+    // kg fix. If file content is the same, rebuilt is not needed.
+    EXPECT_EQ(0u, command_runner_.commands_ran_.size());
 
     builder.command_runner_.release();
   }

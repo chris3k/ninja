@@ -30,10 +30,12 @@ typedef unsigned __int32 uint32_t;
 #include "state.h"
 #include "util.h"
 
+#include "debug_flags.h" // todo(kg): temporary
+
 // The version is stored as 4 bytes after the signature and also serves as a
 // byte order mark. Signature and version combined are 16 bytes long.
 const char kFileSignature[] = "# ninjadeps\n";
-const int kCurrentVersion = 4;
+const int kCurrentVersion = 5;
 
 // Record size is currently limited to less than the full 32 bit, due to
 // internal buffers having to have this size.
@@ -80,13 +82,13 @@ bool DepsLog::OpenForWrite(const string& path, string* err) {
   return true;
 }
 
-bool DepsLog::RecordDeps(Node* node, TimeStamp mtime,
+bool DepsLog::RecordDeps(Node* node, TimeStamp mtime, ContentHash content_hash,
                          const vector<Node*>& nodes) {
-  return RecordDeps(node, mtime, nodes.size(),
+  return RecordDeps(node, mtime, content_hash, nodes.size(),
                     nodes.empty() ? NULL : (Node**)&nodes.front());
 }
 
-bool DepsLog::RecordDeps(Node* node, TimeStamp mtime,
+bool DepsLog::RecordDeps(Node* node, TimeStamp mtime, ContentHash content_hash,
                          int node_count, Node** nodes) {
   // Track whether there's any new data to be recorded.
   bool made_change = false;
@@ -98,7 +100,7 @@ bool DepsLog::RecordDeps(Node* node, TimeStamp mtime,
     made_change = true;
   }
   for (int i = 0; i < node_count; ++i) {
-    if (nodes[i]->id() < 0) {
+    if (nodes[i]->id() < 0 || nodes[i]->hasContentChanged()) {
       if (!RecordId(nodes[i]))
         return false;
       made_change = true;
@@ -108,8 +110,7 @@ bool DepsLog::RecordDeps(Node* node, TimeStamp mtime,
   // See if the new data is different than the existing data, if any.
   if (!made_change) {
     Deps* deps = GetDeps(node);
-    if (!deps ||
-        deps->mtime != mtime ||
+    if (!deps || deps->mtime != mtime || deps->content_hash != content_hash ||
         deps->node_count != node_count) {
       made_change = true;
     } else {
@@ -153,7 +154,7 @@ bool DepsLog::RecordDeps(Node* node, TimeStamp mtime,
     return false;
 
   // Update in-memory representation.
-  Deps* deps = new Deps(mtime, node_count);
+  Deps* deps = new Deps(mtime, content_hash, node_count);
   for (int i = 0; i < node_count; ++i)
     deps->nodes[i] = nodes[i];
   UpdateDeps(node->id(), deps);
@@ -230,7 +231,7 @@ bool DepsLog::Load(const string& path, State* state, string* err) {
       deps_data += 3;
       int deps_count = (size / 4) - 3;
 
-      Deps* deps = new Deps(mtime, deps_count);
+      Deps* deps = new Deps(mtime, 0, deps_count);
       for (int i = 0; i < deps_count; ++i) {
         assert(deps_data[i] < (int)nodes_.size());
         assert(nodes_[deps_data[i]]);
@@ -241,7 +242,7 @@ bool DepsLog::Load(const string& path, State* state, string* err) {
       if (!UpdateDeps(out_id, deps))
         ++unique_dep_record_count;
     } else {
-      int path_size = size - 4;
+      int path_size = size - 4 - 8;
       assert(path_size > 0);  // CanonicalizePath() rejects empty paths.
       // There can be up to 3 bytes of padding.
       if (buf[path_size - 1] == '\0') --path_size;
@@ -259,7 +260,7 @@ bool DepsLog::Load(const string& path, State* state, string* err) {
       // happen if two ninja processes write to the same deps log concurrently.
       // (This uses unary complement to make the checksum look less like a
       // dependency record entry.)
-      unsigned checksum = *reinterpret_cast<unsigned*>(buf + size - 4);
+      unsigned checksum = *reinterpret_cast<unsigned*>(buf + size - 4 - 8);
       int expected_id = ~checksum;
       int id = nodes_.size();
       if (id != expected_id) {
@@ -267,8 +268,12 @@ bool DepsLog::Load(const string& path, State* state, string* err) {
         break;
       }
 
+      // const uint64_t content_hash = CalcFileContentHash(subpath.AsString());
+      ContentHash content_hash =
+          *reinterpret_cast<ContentHash*>(buf + size - 8);
       assert(node->id() < 0);
       node->set_id(id);
+      node->set_old_hash(content_hash);
       nodes_.push_back(node);
     }
   }
@@ -340,7 +345,7 @@ bool DepsLog::Recompact(const string& path, string* err) {
     if (!IsDepsEntryLiveFor(nodes_[old_id]))
       continue;
 
-    if (!new_log.RecordDeps(nodes_[old_id], deps->mtime,
+    if (!new_log.RecordDeps(nodes_[old_id], deps->mtime, deps->content_hash,
                             deps->node_count, deps->nodes)) {
       new_log.Close();
       return false;
@@ -391,7 +396,7 @@ bool DepsLog::RecordId(Node* node) {
   int path_size = node->path().size();
   int padding = (4 - path_size % 4) % 4;  // Pad path to 4 byte boundary.
 
-  unsigned size = path_size + padding + 4;
+  unsigned size = path_size + padding + 4 /* checksum */ + 8 /* content hash */;
   if (size > kMaxRecordSize) {
     errno = ERANGE;
     return false;
@@ -408,10 +413,15 @@ bool DepsLog::RecordId(Node* node) {
   unsigned checksum = ~(unsigned)id;
   if (fwrite(&checksum, 4, 1, file_) < 1)
     return false;
+
+  const uint64_t content_hash = CalcFileContentHash(node->path());
+  if (fwrite(&content_hash, 8, 1, file_) < 1)
+    return false;
   if (fflush(file_) != 0)
     return false;
 
   node->set_id(id);
+  node->set_old_hash(content_hash);
   nodes_.push_back(node);
 
   return true;

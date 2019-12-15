@@ -215,6 +215,17 @@ TimeStamp RealDiskInterface::Stat(const string& path, string* err) const {
 #endif
 }
 
+// ContentHash RealDiskInterface::Hash(const string& path, string* err) {
+//   MD5_CTX ctx_ = { 0 };
+//   MD5_Init(&ctx_);
+//   string content;
+//   ReadFile(path, &content, err);
+//   MD5_Update(&ctx_, &content[0], content.size());
+//   ContentHash content_hash;
+//   MD5_Final(reinterpret_cast<unsigned char*>(&content_hash), &ctx_);
+//   return content_hash;
+// }
+
 bool RealDiskInterface::WriteFile(const string& path, const string& contents) {
   FILE* fp = fopen(path.c_str(), "w");
   if (fp == NULL) {

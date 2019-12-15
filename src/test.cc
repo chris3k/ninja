@@ -156,6 +156,16 @@ void VirtualFileSystem::Create(const string& path,
   files_created_.insert(path);
 }
 
+ContentHash VirtualFileSystem::Hash(const string& path, string* err) {
+  FileMap::const_iterator i = files_.find(path);
+  if (i != files_.end()) {
+    const string &content = i->second.contents;
+    ContentHash content_hash = MurmurHash2(&content[0], content.size());
+    return content_hash;
+  }
+  return ContentHash();
+}
+
 TimeStamp VirtualFileSystem::Stat(const string& path, string* err) const {
   FileMap::const_iterator i = files_.find(path);
   if (i != files_.end()) {

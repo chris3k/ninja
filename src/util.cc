@@ -53,6 +53,7 @@
 
 #include "edit_distance.h"
 #include "metrics.h"
+#include "murmur2.h"
 
 void Fatal(const char* msg, ...) {
   va_list ap;
@@ -630,3 +631,39 @@ bool Truncate(const string& path, size_t size, string* err) {
   }
   return true;
 }
+
+ContentHash CalcFileContentHash(const string& path) {
+  string err;
+  string content;
+  int retcode = ReadFile(path, &content, &err);
+  if (retcode != 0) {
+    return 0;
+  }
+  ContentHash hash = MurmurHash64A(&content[0], content.size());
+  return hash;
+}
+
+// ContentHash::ContentHash() { memset(hash_, 0, sizeof(hash_)); }
+
+// ContentHash::ContentHash(const ContentHash& other) {
+//   memcpy(hash_, other.hash_, sizeof(hash_));
+// }
+
+// ContentHash& ContentHash::operator=(const ContentHash& other) {
+//   memcpy(hash_, other.hash_, sizeof(hash_));
+//   return *this;
+// }
+
+// ContentHash::~ContentHash() {}
+
+// bool ContentHash::operator==(const ContentHash& other) const {
+//   // return memcmp(hash_, other.hash_, sizeof(hash_)) == 0;
+//   // We store first 8 bytes in build_log
+//   return memcmp(hash_, other.hash_, sizeof(hash_) / 2) == 0;
+// }
+
+// bool ContentHash::operator!=(const ContentHash& other) const {
+//   return !(*this == other);
+// }
+
+// const unsigned char* ContentHash::data() const { return &hash_[0]; }

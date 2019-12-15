@@ -15,6 +15,9 @@
 #ifndef NINJA_UTIL_H_
 #define NINJA_UTIL_H_
 
+#include "compiler_defs.h"
+// #include "md5.h"
+
 #ifdef _WIN32
 #include "win32port.h"
 #else
@@ -31,22 +34,10 @@ using namespace std;
 #define NORETURN __attribute__((noreturn))
 #endif
 
+typedef uint64_t ContentHash;
+
 /// Log a fatal message and exit.
 NORETURN void Fatal(const char* msg, ...);
-
-// Have a generic fall-through for different versions of C/C++.
-#if defined(__cplusplus) && __cplusplus >= 201703L
-#define NINJA_FALLTHROUGH [[fallthrough]]
-#elif defined(__cplusplus) && __cplusplus >= 201103L && defined(__clang__)
-#define NINJA_FALLTHROUGH [[clang::fallthrough]]
-#elif defined(__cplusplus) && __cplusplus >= 201103L && defined(__GNUC__) && \
-    __GNUC__ >= 7
-#define NINJA_FALLTHROUGH [[gnu::fallthrough]]
-#elif defined(__GNUC__) && __GNUC__ >= 7 // gcc 7
-#define NINJA_FALLTHROUGH __attribute__ ((fallthrough))
-#else // C++11 on gcc 6, and all other cases
-#define NINJA_FALLTHROUGH
-#endif
 
 /// Log a warning message.
 void Warning(const char* msg, ...);
@@ -121,5 +112,25 @@ string GetLastErrorString();
 /// Calls Fatal() with a function name and GetLastErrorString.
 NORETURN void Win32Fatal(const char* function, const char* hint = NULL);
 #endif
+
+ContentHash CalcFileContentHash(const string& path);
+
+// class ContentHash {
+//  public:
+//   ContentHash();
+//   ContentHash(const ContentHash& other);
+
+//   ContentHash& operator=(const ContentHash& other);
+
+//   ~ContentHash();
+
+//   bool operator==(const ContentHash& other) const;
+//   bool operator!=(const ContentHash& other) const;
+
+//   const unsigned char* data() const;
+
+//  private:
+//   unsigned char hash_[16];
+// };
 
 #endif  // NINJA_UTIL_H_

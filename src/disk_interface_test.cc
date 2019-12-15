@@ -186,6 +186,16 @@ TEST_F(DiskInterfaceTest, ReadFile) {
             disk_.ReadFile(kTestFile, &content, &err));
   EXPECT_EQ(kTestContent, content);
   EXPECT_EQ("", err);
+
+  const string expected_hash = "b364a892ac00462a";
+  const ContentHash hash = CalcFileContentHash(kTestFile);
+  string hash_string(16, '?');
+  const unsigned char* p = reinterpret_cast<const unsigned char*>(&hash);
+  for (size_t i = 0; i < sizeof(ContentHash); i++) {
+    hash_string[2*i] = "0123456789abcdef"[(p[i] >> 4) & 0xf];
+    hash_string[2*i+1] = "0123456789abcdef"[p[i] & 0xf];
+  }
+  ASSERT_EQ(expected_hash, hash_string);
 }
 
 TEST_F(DiskInterfaceTest, MakeDirs) {
@@ -217,6 +227,7 @@ struct StatTest : public StateTestWithBuiltinRules,
 
   // DiskInterface implementation.
   virtual TimeStamp Stat(const string& path, string* err) const;
+  virtual ContentHash Hash(const string& path, string* err);
   virtual bool WriteFile(const string& path, const string& contents) {
     assert(false);
     return true;
@@ -245,6 +256,10 @@ TimeStamp StatTest::Stat(const string& path, string* err) const {
   if (i == mtimes_.end())
     return 0;  // File not found.
   return i->second;
+}
+
+ContentHash StatTest::Hash(const string& path, string* err) {
+  return ContentHash();
 }
 
 TEST_F(StatTest, Simple) {

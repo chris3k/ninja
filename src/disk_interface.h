@@ -20,6 +20,7 @@
 using namespace std;
 
 #include "timestamp.h"
+#include "util.h"
 
 /// Interface for reading files from disk.  See DiskInterface for details.
 /// This base offers the minimum interface needed just to read files.
@@ -47,6 +48,9 @@ struct DiskInterface: public FileReader {
   /// stat() a file, returning the mtime, or 0 if missing and -1 on
   /// other errors.
   virtual TimeStamp Stat(const string& path, string* err) const = 0;
+
+  ///
+  // virtual ContentHash Hash(const string& path, string* err) = 0;
 
   /// Create a directory, returning false on failure.
   virtual bool MakeDir(const string& path) = 0;
@@ -76,6 +80,7 @@ struct RealDiskInterface : public DiskInterface {
                       {}
   virtual ~RealDiskInterface() {}
   virtual TimeStamp Stat(const string& path, string* err) const;
+  // virtual ContentHash Hash(const string& path, string* err);
   virtual bool MakeDir(const string& path);
   virtual bool WriteFile(const string& path, const string& contents);
   virtual Status ReadFile(const string& path, string* contents, string* err);

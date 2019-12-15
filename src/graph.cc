@@ -27,8 +27,31 @@
 #include "state.h"
 #include "util.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+// namespace {
+// __off_t FileSize(const char* path) {
+//   struct stat st = { 0 };
+//   if (::stat(path, &st) != 0) {
+//     return -1;
+//   }
+//   return st.st_size;
+// }
+// }  // namespace
+
 bool Node::Stat(DiskInterface* disk_interface, string* err) {
-  return (mtime_ = disk_interface->Stat(path_, err)) != -1;
+  mtime_ = disk_interface->Stat(path_, err);
+  return mtime_ != -1;
+}
+
+bool Node::hasContentChanged() {
+  if (old_hash_ == old_hash_magic) return true;
+  if (hash_ == hash_magic) {
+    hash_ = CalcFileContentHash(path_);
+  }
+  return old_hash_ != hash_;
 }
 
 bool DependencyScan::RecomputeDirty(Node* node, string* err) {
@@ -96,8 +119,11 @@ bool DependencyScan::RecomputeDirty(Node* node, vector<Node*>* stack,
   // Load output mtimes so we can compare them to the most recent input below.
   for (vector<Node*>::iterator o = edge->outputs_.begin();
        o != edge->outputs_.end(); ++o) {
+    EXPLAIN("Load mtimes of %s", (*o)->path().c_str());
     if (!(*o)->StatIfNecessary(disk_interface_, err))
       return false;
+    EXPLAIN("  . hash old'%016lx -> new'%016lx", (*o)->old_hash(),
+            (*o)->hash());
   }
 
   if (!edge->deps_loaded_) {
@@ -133,8 +159,11 @@ bool DependencyScan::RecomputeDirty(Node* node, vector<Node*>* stack,
         EXPLAIN("%s is dirty", (*i)->path().c_str());
         dirty = true;
       } else {
+        EXPLAIN("%s is *not* dirty", (*i)->path().c_str());
         if (!most_recent_input || (*i)->mtime() > most_recent_input->mtime()) {
-          most_recent_input = *i;
+          if ((*i)->hasContentChanged()) {
+            most_recent_input = *i;
+          }
         }
       }
     }

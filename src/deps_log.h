@@ -23,6 +23,8 @@ using namespace std;
 
 #include "timestamp.h"
 
+typedef uint64_t ContentHash;
+
 struct Node;
 struct State;
 
@@ -71,16 +73,20 @@ struct DepsLog {
 
   // Writing (build-time) interface.
   bool OpenForWrite(const string& path, string* err);
-  bool RecordDeps(Node* node, TimeStamp mtime, const vector<Node*>& nodes);
-  bool RecordDeps(Node* node, TimeStamp mtime, int node_count, Node** nodes);
+  bool RecordDeps(Node* node, TimeStamp mtime, ContentHash content_hash,
+                  const vector<Node*>& nodes);
+  bool RecordDeps(Node* node, TimeStamp mtime, ContentHash content_hash,
+                  int node_count, Node** nodes);
   void Close();
 
   // Reading (startup-time) interface.
   struct Deps {
-    Deps(int64_t mtime, int node_count)
-        : mtime(mtime), node_count(node_count), nodes(new Node*[node_count]) {}
+    Deps(int64_t mtime, ContentHash content_hash, int node_count)
+        : mtime(mtime), content_hash(content_hash),
+        node_count(node_count), nodes(new Node*[node_count]) {}
     ~Deps() { delete [] nodes; }
     TimeStamp mtime;
+    ContentHash content_hash;
     int node_count;
     Node** nodes;
   };
